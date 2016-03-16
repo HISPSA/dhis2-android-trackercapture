@@ -56,6 +56,7 @@ import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.support.v7.app.AlertDialog;
 
 import com.raizlabs.android.dbflow.structure.Model;
 import com.squareup.otto.Subscribe;
@@ -112,12 +113,16 @@ import org.hisp.dhis.android.trackercapture.ui.rows.programoverview.ProgramStage
 import org.hisp.dhis.android.trackercapture.ui.rows.programoverview.ProgramStageLabelRow;
 import org.hisp.dhis.android.trackercapture.ui.rows.programoverview.ProgramStageRow;
 import org.joda.time.DateTime;
+import org.joda.time.LocalDate;
+import org.joda.time.Years;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 
 public class ProgramOverviewFragment extends AbsProgramRuleFragment implements View.OnClickListener,
         AdapterView.OnItemClickListener,
@@ -173,6 +178,10 @@ public class ProgramOverviewFragment extends AbsProgramRuleFragment implements V
 
     private ProgramOverviewFragmentState mState;
     private ProgramOverviewFragmentForm mForm;
+
+    private String displayAge;
+    private String ageToday;
+
 
     private INavigationHandler mNavigationHandler;
 
@@ -854,11 +863,89 @@ public class ProgramOverviewFragment extends AbsProgramRuleFragment implements V
         mNavigationHandler.switchFragment(enrollmentDataEntryFragment, EnrollmentDataEntryFragment.class.getName(), true);
     }
 
+
+
+    //@Arthur: ADD method isValidDate to verify if textfield is a valid date
+    public static boolean isValidDate(String inDate){
+        SimpleDateFormat dateFormat =  new SimpleDateFormat("yyyy-mm-dd");
+        dateFormat.setLenient(false);
+
+        try {
+            dateFormat.parse(inDate.trim());
+        } catch (ParseException e) {
+            e.printStackTrace();
+            return false;
+
+        }
+        return true;
+    }
+
+
+    //@Arthur: method changes to render AgeToday in Trackercapture and ADD the else-if block
     public void showDataEntryFragment(Event event, String programStage) {
         Bundle args = getArguments();
         EventDataEntryFragment fragment;
+        String progId = mForm.getProgram().getUid();
         if (event == null) {
             fragment = EventDataEntryFragment.newInstanceWithEnrollment(args.getString(ORG_UNIT_ID), args.getString(PROGRAM_ID), programStage, mForm.getEnrollment().getLocalId());
+        }else if(progId.equals("u9FZUM7kn38")&&event!=null){
+                /*- This Else-If block below is used to add the AgeToday Feature, a requirement for the HPV Campaign Program -*/
+            fragment = EventDataEntryFragment.newInstanceWithEnrollment(args.getString(ORG_UNIT_ID), args.getString(PROGRAM_ID), programStage, event.getLocalEnrollmentId(), event.getLocalId());
+            Enrollment enrollment = TrackerController.getEnrollment(event.getLocalEnrollmentId());
+            //Enrollment enrollment = DataValueController.getEnrollment(event.getLocalEnrollmentId());
+            List<TrackedEntityAttributeValue> teav = enrollment.getAttributes();
+
+            for(TrackedEntityAttributeValue val : teav)
+            {
+                System.out.println("The learner details are: ->" + val.getValue());
+
+            }
+
+            //If passport number is entered then :  String learnerDob   = teav.get(4).getValue();
+            //String learnerDob   = teav.get(3).getValue(); Training Instance - Position for LearnerDOB when IDNumber is entered
+            String learnerDob   = teav.get(2).getValue(); //Staging Instance
+            // String learnerDob   = teav.get(3).getValue();
+            if(!isValidDate(learnerDob))
+                learnerDob = teav.get(3).getValue();
+            System.out.println("What is in learnerstring :" + learnerDob);
+            //--Use Joda Time to compute the learner's age today
+            LocalDate birthdate = new LocalDate(learnerDob);
+            LocalDate now = new LocalDate();
+            //Compute learners age today
+            Years learnersAgeToday = Years.yearsBetween(birthdate,now);
+
+
+
+            System.out.println("The learners age today is:====>" + learnersAgeToday);
+            ageToday = String.valueOf(learnersAgeToday);
+            StringBuilder sbAgeToday = new StringBuilder(ageToday);
+            sbAgeToday.delete(0,1);
+
+            sbAgeToday.append("EARS");
+            System.out.println("The OLD learners age is:" + ageToday);
+            //  String myDisplay = printLearnersAge();
+            displayAge = sbAgeToday.toString();
+            System.out.println("THE NEW LEARNERS AGE FIXED: " + displayAge);
+            //   List<ProgramStageDataElement> programStageDataElements = MetaDataController.getProgramStageDataElements
+            //(MetaDataController.getProgramStage(event.getProgramStageId()));
+            //  for(ProgramStageDataElement de: programStageDataElements) {
+            //       System.out.println("The data elements in the program are:" + de.getDataElement());
+
+
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+
+            builder.setMessage("The learner's Age Today is: " + displayAge)
+                    .setCancelable(false)
+                    .setTitle("Learner's Age Today Notification")
+                    .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            dialog.dismiss();
+                        }
+                    });
+
+            AlertDialog dialog = builder.create();
+            dialog.show();
         } else {
             fragment = EventDataEntryFragment.newInstanceWithEnrollment(args.getString(ORG_UNIT_ID), args.getString(PROGRAM_ID), programStage,
                     event.getLocalEnrollmentId(), event.getLocalId());
